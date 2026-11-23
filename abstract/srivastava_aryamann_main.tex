@@ -1,0 +1,44 @@
+\documentclass[11pt]{article}
+\usepackage{graphicx}
+\usepackage[a4paper, margin=1in]{geometry}
+\usepackage{fontspec}\setmainfont{texgyretermes}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]
+\usepackage{authblk}
+\usepackage{url,etoolbox}
+\AtBeginEnvironment{thebibliography}{\scriptsize}\let\OLDbib\thebibliography\renewcommand\thebibliography[1]{\OLDbib{#1}\setlength{\parskip}{0pt}\setlength{\itemsep}{0pt}}
+\makeatletter\renewcommand\section{\@startsection{section}{1}{0pt}{4pt}{2pt}{\normalsize\bfseries}}\makeatother
+\begin{document}
+\begin{minipage}{0.2\textwidth}\includegraphics[width=\textwidth]{ercoftac_logo.png}\end{minipage}\hfill
+\begin{minipage}{0.75\textwidth}\fontsize{8}{10}\selectfont\textbf{4th ERCOFTAC Workshop on Machine Learning for Fluid Dynamics, April 2027, Florence, Italy}\end{minipage}
+\begin{center}
+{\fontsize{15}{18}\selectfont\textbf{Unconverged labels and unmeasured flux: what Darcy neural-operator benchmarks hide}}\\[0.35cm]
+\normalsize\textbf{Aryamann Srivastava$^{1}$, Varun Sathaye$^{1}$, Atishay Jain$^{1}$, Vedant S. Tiwari$^{1}$}\\
+{\fontsize{9}{10}\selectfont\textit{$^1$Indian Institute of Technology Kanpur, India}}
+\end{center}
+\noindent
+Neural operators for steady Darcy flow, $-\nabla\cdot(\kappa\nabla u)=f$, are trained and ranked on PDEBench~\cite{pdebench}
+and judged by the relative $L^2$ error of the pressure $u$. We test both conventions against a converged reference. A
+cell-centred finite-volume solver, verified by self-convergence (0.06\% between $256^2$ and $512^2$), re-labels the
+standard 900/100/200 split at the native $128^2$ grid. The PDEBench labels differ from the converged solution of the stated
+problem by 5.8\% on average and up to 48\%, which confirms informal reports~\cite{issue102,caebench}. We split the
+discrepancy into a uniform 3.5\% from imposing $u=0$ one cell outside the domain and a non-convergence part that is
+negligible for most maps but reaches 15.5\% on low-permeability maps, the cases usually reported as the operators' hardest.
+An FNO~\cite{fno} that scores 2.5\% against PDEBench labels is 6.4\% off the converged solutions and 36\% off on those maps;
+retrained on converged labels it reaches 0.86\%, and the hard maps become easy (0.7\%).
+
+Pressure accuracy, however, says little about the flux $q=-\kappa\nabla u$ that transport and upscaling need. Scored with
+conservative face fluxes, the converged-label FNO, U-Net~\cite{unet} and DeepONet~\cite{deeponet} have flux errors 8 to 34
+times their pressure errors and mass-balance residuals an order of magnitude above the source (Fig.~\ref{fig:main}b); unlike
+earlier residual-based checks~\cite{camposvilar}, this is measured against the converged flux. A relative face-flux term in
+the loss cuts the FNO flux error six-fold (29\% to 4.9\%) and the residual seven-fold at unchanged pressure error, and changes
+the ranking: FNO beats U-Net on pressure while U-Net beats FNO on flux, in every seed. Combined with randomised-contrast
+training data and an exact scaling normalisation, $u[c\kappa]=u[\kappa]/c$~\cite{ngo}, one model stays within 5\% pressure
+and 18\% flux error on shifted contrast, phase-count and permeability-level sets, where a pressure-only model reports
+3.6\% pressure error but 240\% flux error. Corrected labels, metrics and test sets will be released.
+\vspace{-4pt}\begin{figure}[h]
+\centering\includegraphics[width=0.9\textwidth]{fig_abstract.pdf}
+\vspace{-6pt}\caption{\small (a) PDEBench label error per test map. (b) Test error against converged labels at $128^2$, three seeds.}
+\label{fig:main}
+\end{figure}
+\vspace{-0.4cm}
+\vspace{-6pt}\bibliographystyle{unsrt}\bibliography{refs}
+\end{document}
