@@ -1,0 +1,64 @@
+\documentclass[10pt]{article}
+\usepackage[a4paper,margin=1.8cm]{geometry}
+\usepackage{fontspec}\setmainfont{texgyretermes}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]
+\usepackage{enumitem,titlesec,xcolor}
+\setlist{nosep,leftmargin=1.2em}
+\titleformat{\section}{\normalsize\bfseries}{}{0pt}{}\titlespacing*{\section}{0pt}{6pt}{2pt}
+\newcommand{\pend}[1]{\textcolor{red}{[#1]}}
+\pagestyle{empty}
+\begin{document}
+\begin{center}
+{\large\bfseries What Darcy neural-operator benchmarks hide: unconverged labels and unmeasured flux}\\[2pt]
+Team PINNacles (Aryamann Srivastava, Varun Sathaye, Atishay Jain, Vedant S. Tiwari), AE646, IIT Kanpur
+\end{center}
+
+\section{Research gap}
+Neural operators (FNO, U-Net, DeepONet) for steady Darcy flow, $-\nabla\cdot(\kappa\nabla u)=f$, are trained and ranked
+almost entirely on PDEBench 2D Darcy and scored by the relative $L^2$ error of the pressure $u$. Two things are missing.
+\begin{enumerate}
+\item \textbf{Label fidelity is unquantified.} Recent informal reports (a public re-solve of the dataset, PDEBench issue \#102,
+and a remark in CAE-Bench, 2026) indicate that the labels are fixed-time snapshots of a pseudo-transient solve, not steady
+states. No peer-reviewed work measures how large this error is relative to model errors, where it sits, or how it distorts
+the conclusions drawn from the benchmark.
+\item \textbf{The physically used quantity is not evaluated.} Engineering use of a Darcy solution (transport, upscaling,
+travel times) needs the flux $q=-\kappa\nabla u$ and local mass balance. We found no work that reports the flux error of
+standard operators against a converged reference or compares it with the pressure error; the closest study reports only a
+PDE-residual for FNO.
+\end{enumerate}
+
+\section{How we fill it}
+\begin{itemize}
+\item \textbf{Converged reference.} A cell-centred finite-volume solver, verified by self-convergence (0.15\% from
+$128^2$ to $256^2$, 0.06\% from $256^2$ to $512^2$), re-labels the full 900/100/200 split at the native $128^2$ grid.
+\item \textbf{Label audit.} PDEBench labels differ from the converged solution of the stated problem by 5.8\% on average
+(median 3.5\%, worst 48\%). The error has two parts: a uniform 3.5\% from placing $u=0$ one cell outside the domain, and a
+non-convergence part that is small for most maps (median 0.5\%) but reaches 15.5\% on average on the maps dominated by low
+permeability. These are exactly the maps previously reported as the operators' hardest cases.
+\item \textbf{Flux audit.} With conservative two-point face fluxes, the flux error of trained operators is 3.5 to 10 times
+their pressure error (FNO 2.0\% pressure vs 9.8\% flux; DeepONet 6.9\% vs 50\%), and about half of it lies within two cells
+of phase interfaces, which cover 10\% of the domain.
+\item \textbf{Consequences and fixes.} An FNO with 2.5\% error against PDEBench labels has 6.4\% error against converged
+solutions (36\% on the hard maps). Retraining on converged labels gives \pend{x}; a flux-aware loss gives \pend{y} flux
+error; an exact scaling normalisation ($u[c\kappa]=u[\kappa]/c$) with randomised-contrast data keeps errors at 1.7 to 4\%
+on shifted contrast, phase-count and level sets; a finite-volume residual flags failures with Spearman \pend{z} against
+\pend{w} for ensemble spread.
+\end{itemize}
+
+\section{Novelty}
+\begin{itemize}
+\item First controlled, peer-reviewable quantification of PDEBench Darcy label error, split into its boundary and
+non-convergence parts, and its effect on reported accuracy and on failure analysis (the ``hard maps'' are largely a label
+artefact).
+\item First evaluation of standard Darcy operators on flux and mass balance against a converged reference, showing that the
+pressure metric hides errors several times larger and \pend{changes the ranking of architectures}.
+\item Cheap remedies that need no new architecture: converged labels, a flux-aware loss, an exact symmetry normalisation, and
+a one-matrix-product residual check.
+\end{itemize}
+
+\section{Usefulness to a broader audience}
+PDEBench Darcy is one of the most used test cases in scientific machine learning, so every reported Darcy error carries this
+label floor. Groups using operator surrogates for groundwater, reservoir and CO$_2$-storage flow need flux, not pressure,
+and get a metric and a residual check they can apply to any model. The corrected labels, audit code and shifted test sets
+will be released, and the protocol (verify labels by self-convergence, score the quantity of interest) applies to other
+benchmarks.
+\end{document}
