@@ -207,9 +207,9 @@ def main(argv):
         opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
         step += 1
         if therm >= 0 and step % 50 == 0:                          # shared lab card: pause while hot
-            if gpu_temp(therm) >= 84:
+            if gpu_temp(therm) >= 86:
                 torch.cuda.synchronize()
-                while gpu_temp(therm) >= 80:
+                while gpu_temp(therm) > 82:
                     time.sleep(3)
         if step % eval_every == 0 or step == a.steps:
             v = float(evaluate(model, data, data.k_va, data.u_va, a.res, stats, scale).mean())

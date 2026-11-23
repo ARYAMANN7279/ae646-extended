@@ -5,7 +5,7 @@ if the card reaches KILL_C or another user's process appears on it. CUDA_VISIBLE
 import os, subprocess, sys, threading, time
 from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]; PY = sys.executable
-KILL_C, START_C = 89, 78
+KILL_C, START_C = 89, 82
 cards = [int(c) for c in sys.argv[2].split(",")]; jobs_file = Path(sys.argv[1]); log = open(ROOT / "logs" / "lanes.log", "a")
 def say(*a):
     print(time.strftime("%m-%d %H:%M:%S"), *a, file=log, flush=True)

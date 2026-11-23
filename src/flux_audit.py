@@ -10,6 +10,7 @@ ROOT = Path(__file__).resolve().parents[1]; N = 64; h = 1.0 / N
 
 def faces(u, k, bc=0.5):
     """Outward-positive face fluxes per unit length: interior x/y faces plus the four boundary sides."""
+    h = 1.0 / u.shape[0]
     hx = 2 * k[:, 1:] * k[:, :-1] / (k[:, 1:] + k[:, :-1]); hy = 2 * k[1:] * k[:-1] / (k[1:] + k[:-1])
     qx = -hx * (u[:, 1:] - u[:, :-1]) / h; qy = -hy * (u[1:] - u[:-1]) / h
     bL = k[:, 0] * u[:, 0] / (bc * h); bR = k[:, -1] * u[:, -1] / (bc * h)    # flux leaving through each side
@@ -17,7 +18,8 @@ def faces(u, k, bc=0.5):
     return qx, qy, (bL, bR, bB, bT)
 
 def div(qx, qy, b):
-    d = np.zeros((N, N)); d[:, :-1] += qx; d[:, 1:] -= qx; d[:-1] += qy; d[1:] -= qy
+    n = qx.shape[0]; h = 1.0 / n
+    d = np.zeros((n, n)); d[:, :-1] += qx; d[:, 1:] -= qx; d[:-1] += qy; d[1:] -= qy
     d[:, 0] += b[0]; d[:, -1] += b[1]; d[0] += b[2]; d[-1] += b[3]
     return d * h                                     # net outflow per cell; equals f*h^2 = h^2 when conservative
 
@@ -39,7 +41,7 @@ def audit(P, G, K):
         nb = (ex * bx).sum() + (ey * by).sum(); db = (qg[0] ** 2 * bx).sum() + (qg[1] ** 2 * by).sum()
         out["q_rel_band"].append(np.sqrt(nb / db)); out["q_rel_bulk"].append(np.sqrt((num - nb) / (den - db)))
         out["band_err_share"].append(nb / num); out["band_area"].append(B.mean())
-        src = h * h                                   # f = 1 integrated over one cell
+        h = 1.0 / p.shape[0]; src = h * h                                   # f = 1 integrated over one cell
         out["mass_res"].append(np.sqrt(((div(*qp) - src) ** 2).mean()) / src)
         out["mass_res_label"].append(np.sqrt(((div(*qg) - src) ** 2).mean()) / src)
         tot = lambda b: sum(x.sum() for x in b) * h  # total outflow; exact value = integral of f = 1
