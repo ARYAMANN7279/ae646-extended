@@ -51,8 +51,7 @@ error on high-contrast maps.
 \item A controlled, citable quantification of PDEBench Darcy label error (so far reported only informally), split into
 boundary and non-convergence parts, and its consequence: the benchmark's ``hard maps'' are largely a label artefact.
 \item The first evaluation of standard Darcy operators on flux and mass balance against a converged reference. Pressure error
-is 8 to 34 times smaller than flux error without a flux-aware loss, and the ranking flips: FNO beats U-Net on pressure, U-Net beats FNO
-on flux.
+is 8 to 34 times smaller than flux error without a flux-aware loss, and rankings change: with the flux-aware loss, FNO beats U-Net on pressure and U-Net beats FNO on flux in every seed.
 \item Remedies that need no new architecture (converged labels, a flux-aware loss, an exact symmetry normalisation), with an
 honest cost check: one multigrid cycle (1.8 ms) on top of the flux-trained FNO reaches the discretisation floor, but a
 classical multigrid solve is nearly as cheap at this size, so speed is not claimed.
