@@ -186,6 +186,7 @@ def main(argv):
     best = {"val": float("inf"), "step": -1, "state": None}
     curve = {"step": [], "val": []}
     perm, pos, step, t0 = torch.randperm(N, generator=gen), 0, 0, time.time()
+    gap = 0.0
     resg = [32, 64, 128]
     while step < a.steps:
         if pos + a.batch > N:
@@ -206,11 +207,16 @@ def main(argv):
                                             tgt[..., 0] * stats["u_std"] + stats["u_mean"], kb[:, ::sr, ::sr]).mean()
         opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
         step += 1
-        if therm >= 0 and step % 50 == 0:                          # shared lab card: pause while hot
-            if gpu_temp(therm) >= 86:
-                torch.cuda.synchronize()
-                while gpu_temp(therm) > 82:
-                    time.sleep(3)
+        if therm >= 0:                                             # shared lab card: adaptive duty cycle
+            if step % 10 == 0:
+                tc = gpu_temp(therm)
+                gap = min(0.5, gap + 0.01) if tc >= 82 else max(0.0, gap - 0.005) if tc <= 77 else gap
+                if tc >= 85:
+                    torch.cuda.synchronize()
+                    while gpu_temp(therm) > 80:
+                        time.sleep(2)
+            if gap > 0:
+                torch.cuda.synchronize(); time.sleep(gap)
         if step % eval_every == 0 or step == a.steps:
             v = float(evaluate(model, data, data.k_va, data.u_va, a.res, stats, scale).mean())
             curve["step"].append(step); curve["val"].append(v)
