@@ -51,7 +51,8 @@ if __name__ == "__main__":
     zt = np.load(ROOT / "data/clean/test.npz"); Kt, Gt = zt["kappa128"], zt["u128"]
     Upde = np.load(ROOT / "data/cache/u128.npy", mmap_mode="r"); Gpde = np.stack([Upde[i] for i in zt["idx"]])
     sets = {Path(f).stem: np.load(f) for f in sorted(glob.glob(str(ROOT / "data/ood_clean/*.npz")))}
-    only = sys.argv[1:]; res = json.load(open(R / "analysis.json")) if (R / "analysis.json").exists() else {}
+    only = sys.argv[1:]; AJ = R / (f"analysis_{only[0]}.json" if len(only) == 1 else "analysis.json")
+    res = json.load(open(AJ)) if AJ.exists() else {}
     for g, dirs in sorted(groups.items()):
         if only and g not in only: continue
         P = np.stack([np.load(d / "preds.npz")["pred"] for d in dirs]).astype(np.float32)
@@ -66,4 +67,4 @@ if __name__ == "__main__":
               + (f" rho spread {t['rho_spread']:.2f} res {t['rho_res']:.2f}" if "rho_spread" in t else ""), flush=True)
         for s, o in r.get("ood", {}).items():
             print(f"    {s:12s} p {o['p']:.3f} q {o['q']:.3f} res {o['res']:.2e}" + (f" rho spread {o['rho_spread']:.2f} res {o['rho_res']:.2f}" if "rho_spread" in o else ""))
-        json.dump(res, open(R / "analysis.json", "w"), indent=1)
+        json.dump(res, open(AJ, "w"), indent=1)
