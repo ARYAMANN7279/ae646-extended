@@ -73,6 +73,18 @@ def gpu_temp(idx):
         return 0
 
 
+def flux_rel(p, t, k):
+    """Per-sample relative L2 error of two-point face fluxes -k_face * du (harmonic face permeability,
+    interior faces plus Dirichlet boundary faces half a cell out). Grid spacing cancels in the ratio."""
+    hx = 2 * k[:, :, 1:] * k[:, :, :-1] / (k[:, :, 1:] + k[:, :, :-1]); hy = 2 * k[:, 1:] * k[:, :-1] / (k[:, 1:] + k[:, :-1])
+    def q(u):
+        return torch.cat([(hx * (u[:, :, 1:] - u[:, :, :-1])).flatten(1), (hy * (u[:, 1:] - u[:, :-1])).flatten(1),
+                          2 * (k[:, :, 0] * u[:, :, 0]).flatten(1), 2 * (k[:, :, -1] * u[:, :, -1]).flatten(1),
+                          2 * (k[:, 0] * u[:, 0]).flatten(1), 2 * (k[:, -1] * u[:, -1]).flatten(1)], 1)
+    qp, qt = q(p), q(t)
+    return (qp - qt).norm(dim=1) / qt.norm(dim=1)
+
+
 def area_hi(k):
     """High-permeability area share per map (B, H, W) -> (B,)."""
     return (k > 0.5 * (float(k.min()) + float(k.max()))).float().mean(dim=(1, 2))
@@ -112,8 +124,10 @@ def main(argv):
     LOGK = take(argv, "--log-kappa", False, is_bool=True)
     global EQUIV
     EQUIV = take(argv, "--scale-equiv", False, is_bool=True)
+    test_npz = take(argv, "--test-npz", None)                    # replace test labels (e.g. converged solver labels)
+    flux_w = take(argv, "--flux-loss", 0.0, float)               # weight of the relative face-flux loss
     if "--out-root" not in argv:
-        argv += ["--out-root", str(ROOT / "results" / "stage4" / "runs")]
+        argv += ["--out-root", str(ROOT / "results" / "ext" / "runs")]
     if "--model" not in argv:
         argv += ["--model", "mlp" if arch == "mlp" else "fno"]
     a = T.parse(argv)
@@ -149,6 +163,9 @@ def main(argv):
     if val_npz:
         z = np.load(val_npz)
         data.k_va, data.u_va = torch.tensor(z["kappa128"], device=dev), torch.tensor(z["u128"], device=dev)
+    if test_npz:
+        z = np.load(test_npz)
+        data.k_te, data.u_te = torch.tensor(z["kappa128"], device=dev), torch.tensor(z["u128"], device=dev)
     if scale:
         data.u_tr = data.u_tr * kappa_h(data.k_tr)[:, None, None]
     if EQUIV:
@@ -181,12 +198,19 @@ def main(argv):
         r = resg[int(torch.randint(0, 3, (1,), generator=gen))] if multires else a.res
         inp, tgt = data.make(kin(kb), ub, r, stats)
         model.train()
-        loss = T.rel_l2_phys(model(inp), tgt, stats).mean()
+        po = model(inp)
+        loss = T.rel_l2_phys(po, tgt, stats).mean()
+        if flux_w > 0:
+            sr = 128 // r
+            loss = loss + flux_w * flux_rel(po[..., 0] * stats["u_std"] + stats["u_mean"],
+                                            tgt[..., 0] * stats["u_std"] + stats["u_mean"], kb[:, ::sr, ::sr]).mean()
         opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
         step += 1
-        if therm >= 0 and step % 500 == 0:
-            while gpu_temp(therm) >= 86:
-                time.sleep(5)
+        if therm >= 0 and step % 50 == 0:                          # shared lab card: pause while hot
+            if gpu_temp(therm) >= 84:
+                torch.cuda.synchronize()
+                while gpu_temp(therm) >= 80:
+                    time.sleep(3)
         if step % eval_every == 0 or step == a.steps:
             v = float(evaluate(model, data, data.k_va, data.u_va, a.res, stats, scale).mean())
             curve["step"].append(step); curve["val"].append(v)
@@ -200,24 +224,28 @@ def main(argv):
     hard = (area_hi(data.k_te[:, ::2, ::2]) < HARD).cpu().numpy()
     res = {"spec": vars(a), "arch": arch, "target_scale": "kappa_h" if scale else "none", "extra": extra, "n_extra": n_extra,
            "multires": multires, "train_npz": Path(train_npz).name if train_npz else None, "train_mode": train_mode if train_npz else None,
-           "val_npz": Path(val_npz).name if val_npz else None, "log_kappa": LOGK, "scale_equiv": EQUIV, "params": n_params, "gpu": torch.cuda.get_device_name(0) if dev.type == "cuda" else "cpu",
+           "val_npz": Path(val_npz).name if val_npz else None, "log_kappa": LOGK, "scale_equiv": EQUIV, "test_npz": Path(test_npz).name if test_npz else None, "flux_loss": flux_w, "params": n_params, "gpu": torch.cuda.get_device_name(0) if dev.type == "cuda" else "cpu",
            "train_time_s": train_time, "best_step": best["step"], "best_val": best["val"],
            "test_mean": float(te.mean()), "test_median": float(np.median(te)), "test_per_sample": te.tolist(),
            "n_hard_test": int(hard.sum()), "test_hard": float(te[hard].mean()), "test_rest": float(te[~hard].mean())}
     if arch != "mlp":
         res["test_at_res"] = {str(r): float(evaluate(model, data, data.k_te, data.u_te, r, stats, scale).mean()) for r in (32, 64, 128)}
     if ood_dir:                                                    # out-of-distribution sets (stage4_ood.py), error at 64 x 64
-        res["ood"] = {}
+        res["ood"] = {}; ood_pred = {}
         for f in sorted(Path(ood_dir).glob("*.npz")):
             z = np.load(f)
-            e = evaluate(model, data, torch.tensor(z["kappa128"], device=dev), torch.tensor(z["u128"], device=dev), a.res, stats, scale)
+            e, po = evaluate(model, data, torch.tensor(z["kappa128"], device=dev), torch.tensor(z["u128"], device=dev), a.res, stats, scale, return_pred=True)
+            if save_pred:
+                ood_pred[f.stem] = po.cpu().numpy().astype(np.float32)
             res["ood"][f.stem] = {"mean": float(e.mean()), "median": float(np.median(e)), "per_sample": e.tolist()}
     if save_model:
         torch.save({"state": model.state_dict(), "arch": arch, "spec": vars(a), "stats": stats, "scale": scale}, out / "model.pt")
     json.dump(res, open(out / "metrics.json", "w"))
     json.dump(curve, open(out / "curve.json", "w"))
     if save_pred:
-        np.savez_compressed(out / "preds.npz", pred=pred.cpu().numpy().astype(np.float16))
+        np.savez_compressed(out / "preds.npz", pred=pred.cpu().numpy().astype(np.float32))
+        if ood_dir:
+            np.savez_compressed(out / "preds_ood.npz", **ood_pred)
     print(f"[{a.name}] {arch} params {n_params/1e6:.2f}M | val {best['val']:.4f} | test {res['test_mean']:.4f} | hard {res['test_hard']:.3f}"
           + (f" | res32/64/128 {res['test_at_res']['32']:.3f}/{res['test_at_res']['64']:.3f}/{res['test_at_res']['128']:.3f}" if arch != "mlp" else "")
           + f" | {train_time:.0f}s", flush=True)

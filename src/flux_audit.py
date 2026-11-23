@@ -47,9 +47,9 @@ def audit(P, G, K):
     return {k: float(np.mean(v)) for k, v in out.items()}
 
 if __name__ == "__main__":
-    d = np.load(ROOT / "results/stage3/diagnostics_arrays.npz"); G, K = d["gt"], d["kappa"]
+    d = np.load(ROOT / "old/results/stage3/diagnostics_arrays.npz"); G, K = d["gt"], d["kappa"]
     runs = {"fno_final_stage3": [d["pred"]]}
-    for f in sorted(glob.glob(str(ROOT / "results/stage4/runs/*/preds.npz"))):
+    for f in sorted(glob.glob(str(ROOT / "old/results/stage4/runs/*/preds.npz"))):
         runs.setdefault(Path(f).parent.name.rsplit("_s", 1)[0], []).append(np.load(f)["pred"])
     res = {}
     for name, preds in runs.items():

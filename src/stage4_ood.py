@@ -13,7 +13,7 @@ relative to the in-distribution set ("ID"), not as absolute numbers.
 Run: python src/stage4_ood.py --check    (compare generator statistics with the PDEBench training maps)
      python src/stage4_ood.py --build    (write data/ood/<set>.npz with kappa128, u128 for every set)
 """
-import json
+import os, json
 import sys
 import time
 from pathlib import Path
@@ -23,7 +23,7 @@ import numpy as np
 import solvers as S
 
 ROOT = Path(__file__).resolve().parent.parent
-OUT = ROOT / "data" / "ood"
+OUT = ROOT / "data" / ("ood_clean" if os.environ.get("DARCY_CLEAN") == "1" else "ood")
 N = 128
 
 
@@ -69,14 +69,30 @@ SETS = {                                                      # name: (generator
 }
 
 
+CLEAN = os.environ.get("DARCY_CLEAN") == "1"
+
+
+def clean_solve(k):
+    """Converged label of the stated problem: strict cell-centred FV (harmonic faces, u=0 on the domain edge),
+    solved on a 2x refined grid and cell-averaged back to 128 (self-convergence 128->256->512 is 0.15% / 0.06%)."""
+    u = S.solve(np.kron(np.asarray(k, np.float64), np.ones((2, 2))), method="direct", face="harmonic", bc=0.5)
+    return u.reshape(128, 2, 128, 2).mean((1, 3))
+
+
+def label(kap):
+    if CLEAN:
+        return np.stack([clean_solve(k) for k in kap]).astype(np.float32)
+    cal = json.load(open(ROOT / "old" / "results" / "stage3" / "solver_vs_gt.json"))["per_N"]["128"]
+    return np.stack([S.solve(k, method="direct", face=cal["face"], bc=cal["bc"]) for k in kap]).astype(np.float32)
+
+
 def make(name, n_maps=200, seed=7):
     ch, _ = SETS[name]
     p = {**ID, **ch}
     rng = np.random.default_rng(seed)
     f = grf(n_maps, p["tau"], p["alpha"], rng)
     kap = threshold(f, p.get("t", 0.0), lo=p.get("lo", 0.1), hi=p.get("hi", 1.0), mid=p.get("mid"))
-    cal = json.load(open(ROOT / "results" / "stage3" / "solver_vs_gt.json"))["per_N"]["128"]
-    u = np.stack([S.solve(k, method="direct", face=cal["face"], bc=cal["bc"]) for k in kap]).astype(np.float32)
+    u = label(kap)
     return kap, u
 
 
@@ -86,22 +102,22 @@ def make_mixed(n_maps, seed, lo_range=(0.02, 0.5)):
     f = grf(n_maps, ID["tau"], ID["alpha"], rng)
     lo = np.exp(rng.uniform(np.log(lo_range[0]), np.log(lo_range[1]), n_maps))
     kap = np.stack([np.where(fi >= 0, 1.0, l) for fi, l in zip(f, lo)]).astype(np.float32)
-    cal = json.load(open(ROOT / "results" / "stage3" / "solver_vs_gt.json"))["per_N"]["128"]
-    u = np.stack([S.solve(k, method="direct", face=cal["face"], bc=cal["bc"]) for k in kap]).astype(np.float32)
+    u = label(kap)
     return kap, u, lo
 
 
 if __name__ == "__main__":
     for flag, folder, rng_lo in (("--build-mixed", "mixed", (0.02, 0.5)), ("--build-mixed-wide", "mixed_wide", (0.005, 0.5))):
         if flag in sys.argv:                                    # 900 training + 100 validation maps, randomised contrast
+            folder = folder + ("_clean" if CLEAN else "")
             (ROOT / "data" / folder).mkdir(parents=True, exist_ok=True)
-            for name, n, seed in (("train", 900, 11 if folder == "mixed" else 21), ("val", 100, 12 if folder == "mixed" else 22)):
+            for name, n, seed in (("train", 900, 11 if folder in ("mixed", "mixed_clean") else 21), ("val", 100, 12 if folder in ("mixed", "mixed_clean") else 22)):
                 kap, u, lo = make_mixed(n, seed, rng_lo)
                 np.savez_compressed(ROOT / "data" / folder / f"{name}.npz", kappa128=kap, u128=u, k_lo=lo.astype(np.float32))
                 print(folder, name, n, "k_lo range", float(lo.min()), float(lo.max()), flush=True)
     if "--check" in sys.argv:
         # reference: the 200 PDEBench test maps at 64 x 64 stored by stage3_diagnostics.py
-        ref = np.load(ROOT / "results" / "stage3" / "diagnostics_arrays.npz")["kappa"]
+        ref = np.load(ROOT / "old" / "results" / "stage3" / "diagnostics_arrays.npz")["kappa"]
         print("PDEBench test maps (64):", stats(ref))
         for tau in (3.0, 3.5):
             for alpha in (2.5,):
