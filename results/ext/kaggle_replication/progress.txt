@@ -1,0 +1,43 @@
+src/download_data.py 0 76349b0b4389) - matches PDEBench manifest
+Keys in 2D_DarcyFlow_beta1.0_Train.hdf5: ['nu', 'tensor', 'x-coordinate', 'y-coordinate']
+  attrs: {'beta': np.float64(1.0)}
+  nu (permeability) shape: (10000, 128, 128), dtype: float32
+  tensor (pressure) shape: (10000, 1, 128, 128), dtype: float32
+  Downloaded and verified
+
+Done. This single file contains all 10,000 PDEBench samples (no separate test file); src/preprocess.py performs the train/val/test split.
+Next step: run `python src/preprocess.py`.
+ 16G/1.31G [00:02<00:00, 513MB/s]
+md5 2D_DarcyFlow_beta1.0_Train.hdf5:  92%|█████████▏| 1.21G/1.31G [00:02<00:00, 519MB/s]
+md5 2D_DarcyFlow_beta1.0_Train.hdf5:  96%|█████████▌| 1.26G/1.31G [00:02<00:00, 517MB/s]
+md5 2D_DarcyFlow_beta1.0_Train.hdf5: 100%|██████████| 1.31G/1.31G [00:02<00:00, 535MB/s]
+
+src/preprocess.py 0 in statistics only)...
+Train inputs: (900, 64, 64, 3), targets: (900, 64, 64, 1)
+Val inputs:   (100, 64, 64, 3), targets: (100, 64, 64, 1)
+Test inputs:  (200, 64, 64, 3), targets: (200, 64, 64, 1)
+
+Normalization stats: {'coeff_mean': 0.5309522747993469, 'coeff_std': 0.44959667325019836, 'tensor_mean': 0.16486190259456635, 'tensor_std': 0.14429496228694916}
+Done. Processed data saved to /kaggle/temp/AE646/data/processed
+Next step: run training with `python src/train.py --config configs/fno.yaml`
+ 
+src/data_cache.py 0 {'train': 900, 'val': 100, 'test': 200, 'extra': 8800} | grid (128,) coords range 0.00390625 0.99609375
+  train: derived split == data/processed/train.npz : True
+  val: derived split == data/processed/val.npz : True
+  test: derived split == data/processed/test.npz : True
+ 
+split MATCH
+src/clean_labels.py 4 0 test 200 PDEBench vs clean rel-L2 mean 0.0581 median 0.0352 max 0.4756 46s
+val 100 PDEBench vs clean rel-L2 mean 0.0636 median 0.0353 max 0.4402 25s
+train 900 PDEBench vs clean rel-L2 mean 0.0643 median 0.0355 max 0.6208 197s
+ 
+data hashes {'/kaggle/temp/AE646/data/clean/test.npz': '4ead9f5040f7', '/kaggle/temp/AE646/data/clean/train.npz': '1365ed8d7fa7', '/kaggle/temp/AE646/data/clean/val.npz': 'a9c430ec0626', '/kaggle/temp/AE646/data/cleanmix/train.npz': 'e3518b6618bb', '/kaggle/temp/AE646/data/mixed_wide_clean/train.npz': 'c0fec50a8f06', '/kaggle/temp/AE646/data/mixed_wide_clean/val.npz': '4411346898c0', '/kaggle/temp/AE646/data/ood_clean/ID.npz': 'feb536ec2b1f', '/kaggle/temp/AE646/data/ood_clean/contrast_hi.npz': 'fb04e7d1f3b2', '/kaggle/temp/AE646/data/ood_clean/contrast_lo.npz': '8d8e26d97ceb', '/kaggle/temp/AE646/data/ood_clean/mostly_low.npz': '79afa393f683', '/kaggle/temp/AE646/data/ood_clean/rough.npz': '894f49ca342d', '/kaggle/temp/AE646/data/ood_clean/scaled_down.npz': 'd689cbe44d02', '/kaggle/temp/AE646/data/ood_clean/scaled_up.npz': 'b719078178c6', '/kaggle/temp/AE646/data/ood_clean/smooth.npz': '228c8428d980', '/kaggle/temp/AE646/data/ood_clean/three_phase.npz': '1725489e1572'}
+gpu0 e3_fno_cleanmix_flux1_s2 rc=0 878s [e3_fno_cleanmix_flux1_s2] fno params 4.74M | val 0.0207 | test 0.0213 | hard 0.012 | res32/64/128 0.088/0.036/0.021 | 841s
+gpu1 e3_fno_cleanmix_s2 rc=0 879s [e3_fno_cleanmix_s2] fno params 4.74M | val 0.0115 | test 0.0113 | hard 0.007 | res32/64/128 0.084/0.029/0.011 | 846s
+gpu0 e2_unet_clean_flux1_s2 rc=0 619s [e2_unet_clean_flux1_s2] unet params 7.77M | val 0.0138 | test 0.0146 | hard 0.007 | res32/64/128 0.199/0.144/0.015 | 602s
+gpu1 e2_fno_clean_flux1_s2 rc=0 869s [e2_fno_clean_flux1_s2] fno params 4.74M | val 0.0083 | test 0.0084 | hard 0.006 | res32/64/128 0.086/0.029/0.008 | 848s
+gpu0 e1_deeponet_clean_s2 rc=0 318s [e1_deeponet_clean_s2] deeponet params 2.60M | val 0.0550 | test 0.0561 | hard 0.025 | res32/64/128 0.416/0.396/0.056 | 303s
+gpu1 e1_unet_clean_s2 rc=0 662s [e1_unet_clean_s2] unet params 7.77M | val 0.0085 | test 0.0089 | hard 0.005 | res32/64/128 0.451/0.243/0.009 | 645s
+gpu0 e1_fno_clean_s2 rc=0 860s [e1_fno_clean_s2] fno params 4.74M | val 0.0085 | test 0.0082 | hard 0.006 | res32/64/128 0.082/0.028/0.008 | 839s
+gpu1 e1_fno_pde_s2 rc=0 867s [e1_fno_pde_s2] fno params 4.74M | val 0.0313 | test 0.0655 | hard 0.369 | res32/64/128 0.113/0.073/0.066 | 847s
+ALL-DONE
