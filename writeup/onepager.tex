@@ -1,65 +1,57 @@
 \documentclass[10pt]{article}
 \usepackage[a4paper,margin=1.8cm]{geometry}
 \usepackage{fontspec}\setmainfont{texgyretermes}[Extension=.otf,UprightFont=*-regular,BoldFont=*-bold,ItalicFont=*-italic,BoldItalicFont=*-bolditalic]
-\usepackage{enumitem,titlesec,xcolor,graphicx}
+\usepackage{enumitem,titlesec,graphicx}
 \setlist{nosep,leftmargin=1.2em}
 \titleformat{\section}{\normalsize\bfseries}{}{0pt}{}\titlespacing*{\section}{0pt}{6pt}{2pt}
-\newcommand{\pend}[1]{\textcolor{red}{[#1]}}
 \pagestyle{empty}
 \begin{document}
 \begin{center}
-{\large\bfseries What Darcy neural-operator benchmarks hide: unconverged labels and unmeasured flux}\\[2pt]
-Team PINNacles (Aryamann Srivastava, Varun Sathaye, Atishay Jain, Vedant S. Tiwari), AE646, IIT Kanpur
+{\large\bfseries Accurate pressure, wrong flow: downstream errors of Darcy neural operators}\\[2pt]
+Aryamann Srivastava, Varun Sathaye, Atishay Jain, Vedant S. Tiwari, IIT Kanpur
 \end{center}
 
 \section{Research gap}
-Neural operators (FNO, U-Net, DeepONet) for steady Darcy flow, $-\nabla\cdot(\kappa\nabla u)=f$, are trained and ranked
-almost entirely on PDEBench 2D Darcy and scored by the relative $L^2$ error of the pressure $u$. Two things are missing.
-\begin{enumerate}
-\item \textbf{Label fidelity is unquantified.} Recent informal reports (a public re-solve of the dataset in the FlowGuard repository and
-PDEBench issue \#102, both 2026) indicate that the labels are fixed-time snapshots of a pseudo-transient solve, not steady
-states. No peer-reviewed work measures how large this error is relative to model errors, where it sits, or how it distorts
-the conclusions drawn from the benchmark.
-\item \textbf{The physically used quantity is not evaluated.} Engineering use of a Darcy solution (transport, upscaling,
-travel times) needs the flux $q=-\kappa\nabla u$ and local mass balance. We found no work that reports the flux error of
-standard operators against a converged reference or compares it with the pressure error; the closest study reports only a
-PDE-residual for FNO.
-\end{enumerate}
+Neural operators for steady Darcy flow are trained and ranked on PDEBench by the relative $L^2$ error of the pressure.
+Applications use the flux $q=-\kappa\nabla u$: effective permeability, travel times, transport. No published work tests
+whether pressure accuracy carries over to these quantities, or which training choices make it do so. Related work stops
+short: FlowGuard (2026) re-solves the PDEBench labels but scores pressure only; Boon et al.\ (2023) show flux and pressure
+errors diverge for reduced-order Darcy models, not neural operators; Chakraborty and Chen (2026) show better field scores
+can mean worse physics, for airfoils; Sobolev and $H^1$ training (Zhang et al.\ 2026) is not evaluated on flux or
+downstream quantities.
 
 \section{How we fill it}
+\begin{enumerate}
+\item \textbf{Converged references.} Re-solve the PDEBench $128^2$ split with a self-converged finite-volume solver
+(0.06\% from $256^2$ to $512^2$). The published labels deviate by 5.8\% on average (boundary convention plus
+non-convergence), confirming FlowGuard; all models are trained and scored on converged labels.
+\item \textbf{Flux metric.} Conservative two-point face fluxes and the interface band (cells within two of a permeability jump).
+\item \textbf{Downstream metrics.} A pressure-drop problem on the same maps; from each predicted pressure we compute the
+effective permeability $k_{\mathrm{eff}}$ and flux-weighted breakthrough times by semi-analytical (Pollock) particle tracking.
+\item \textbf{Controlled comparison.} FNO, U-Net, DeepONet; $L^2$, $H^1$ and a permeability-weighted face-flux loss;
+three seeds; in-distribution and shifted test sets (contrast, phase count, roughness, permeability level).
+\end{enumerate}
+
+\section{Findings so far}
 \begin{itemize}
-\item \textbf{Converged reference.} A cell-centred finite-volume solver, verified by self-convergence (0.15\% from
-$128^2$ to $256^2$, 0.06\% from $256^2$ to $512^2$), re-labels the full 900/100/200 split at the native $128^2$ grid.
-\item \textbf{Label audit} (Fig.~a). PDEBench labels differ from the converged solution of the stated problem by 5.8\% on
-average (worst 48\%). A uniform 3.5\% comes from placing $u=0$ one cell outside the domain; the rest is non-convergence,
-negligible on most maps (median 0.5\%) but 15.5\% on the low-permeability maps that earlier work, including ours, reported as
-the operators' hardest cases.
-\item \textbf{Retraining and flux audit} (Fig.~b; FNO, U-Net, DeepONet at $128^2$, three seeds). An FNO that scores 2.5\%
-against PDEBench labels has 6.4\% error against converged solutions and 36\% on the hard maps. Trained on converged labels
-the same FNO reaches 0.86\%, and the hard maps stop being hard (0.7\%). Yet its flux $q=-\kappa\nabla u$, scored with
-conservative face fluxes, is 29\% off: 34 times its pressure error, with a mass-balance residual 15 times the source.
-\item \textbf{Flux-aware training.} Adding a relative face-flux term to the loss cuts the FNO flux error six-fold (29\% to
-4.9\%) and the mass-balance residual seven-fold at unchanged pressure error (0.85\%). With randomised-contrast data and an
-exact scaling normalisation ($u[c\kappa]=u[\kappa]/c$) the model stays within 5\% pressure and 18\% flux error on shifted
-contrast, phase-count and permeability-level sets; without the flux term one such model has 3.6\% pressure but 240\% flux
-error on high-contrast maps.
+\item FNO and U-Net with 0.33\% and 0.23\% pressure error have 8.9\% and 5.4\% flux error, concentrated at permeability jumps.
+\item With the $L^2$ loss, 0.2\% pressure error gives 9 to 15\% $k_{\mathrm{eff}}$ error, and FNO and U-Net swap rank
+between pressure and $k_{\mathrm{eff}}$.
+\item $H^1$ gives the best pressure but 3.5 to 5.9\% $k_{\mathrm{eff}}$ error. The face-flux loss gives 1\%
+$k_{\mathrm{eff}}$ and 2\% late-breakthrough error at the same pressure error, with no architecture change.
+\item On maps from an independent generator: 10 to 18\% $k_{\mathrm{eff}}$ error with the face-flux loss, 56 to 665\% otherwise.
 \end{itemize}
-\vspace{-2pt}\begin{center}\includegraphics[width=\linewidth]{fig_onepager.pdf}\end{center}\vspace{-8pt}
+\begin{center}\includegraphics[width=0.95\textwidth]{fig_drop.pdf}\end{center}
 
 \section{Novelty}
-\begin{itemize}
-\item A controlled, citable quantification of PDEBench Darcy label error (so far reported only informally), split into
-boundary and non-convergence parts, and its consequence: the benchmark's ``hard maps'' are largely a label artefact.
-\item The first evaluation of standard Darcy operators on flux and mass balance against a converged reference. Pressure error
-is 8 to 34 times smaller than flux error without a flux-aware loss, and rankings change: with the flux-aware loss, FNO beats U-Net on pressure and U-Net beats FNO on flux in every seed.
-\item Remedies that need no new architecture (converged labels, a flux-aware loss, an exact symmetry normalisation), with an
-honest cost check: one multigrid cycle (1.8 ms) on top of the flux-trained FNO reaches the discretisation floor, but a
-classical multigrid solve is nearly as cheap at this size, so speed is not claimed.
-\end{itemize}
+First measurement of how pressure error in Darcy neural operators translates into flux, effective-permeability and
+breakthrough-time error against converged references, and first comparison of training losses on those quantities.
+The label re-solve builds on FlowGuard; the scaling normalisation used for shifted permeability levels is from
+Neural Green's Operators (2026). Neither is claimed as new.
 
-\section{Usefulness to a broader audience}
-PDEBench Darcy is among the most used test cases in scientific machine learning, so every reported Darcy error carries this
-label floor. Groundwater, reservoir and CO$_2$-storage users need flux, not pressure, and get a metric and a training loss they
-can apply to any model. The corrected labels, audit code and shifted test sets will be released; the protocol (verify labels
-by self-convergence, score the quantity of interest) carries over to other benchmarks.
+\section{Why it matters}
+Surrogates are adopted for upscaling, groundwater and reservoir screening, where $k_{\mathrm{eff}}$ and arrival times are
+the outputs. A model chosen by pressure error can be the worse one for these uses. We give the community converged labels,
+a downstream benchmark and a one-line loss change, and propose flux and downstream errors as standard metrics.
+Target: ERCOFTAC ML4Fluids workshop, Florence, April 2027 (abstract due 4 December 2026).
 \end{document}
