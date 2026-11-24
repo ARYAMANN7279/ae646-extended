@@ -175,7 +175,7 @@ def rel(a, b):
     return np.abs(a - b) / np.abs(b)
 
 
-def score_set(P, K, G, P_ref=400):
+def score_set(P, K, G, P_ref=2000):
     """P (S, M, N, N) predictions of S seeds; returns mean errors over seeds and maps."""
     ref = downstream(G, K, P_ref); qx_t, qy_t = faces(G, K); out = []; cb, bx, by = band(K)
     for p in P:
