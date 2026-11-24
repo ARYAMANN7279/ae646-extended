@@ -16,8 +16,8 @@ Team PINNacles (Aryamann Srivastava, Varun Sathaye, Atishay Jain, Vedant S. Tiwa
 Neural operators (FNO, U-Net, DeepONet) for steady Darcy flow, $-\nabla\cdot(\kappa\nabla u)=f$, are trained and ranked
 almost entirely on PDEBench 2D Darcy and scored by the relative $L^2$ error of the pressure $u$. Two things are missing.
 \begin{enumerate}
-\item \textbf{Label fidelity is unquantified.} Recent informal reports (a public re-solve of the dataset, PDEBench issue \#102,
-and a remark in CAE-Bench, 2026) indicate that the labels are fixed-time snapshots of a pseudo-transient solve, not steady
+\item \textbf{Label fidelity is unquantified.} Recent informal reports (a public re-solve of the dataset in the FlowGuard repository and
+PDEBench issue \#102, both 2026) indicate that the labels are fixed-time snapshots of a pseudo-transient solve, not steady
 states. No peer-reviewed work measures how large this error is relative to model errors, where it sits, or how it distorts
 the conclusions drawn from the benchmark.
 \item \textbf{The physically used quantity is not evaluated.} Engineering use of a Darcy solution (transport, upscaling,

@@ -19,7 +19,7 @@ Neural operators for steady Darcy flow, $-\nabla\cdot(\kappa\nabla u)=f$, are tr
 and judged by the relative $L^2$ error of the pressure $u$. We test both conventions against a converged reference. A
 cell-centred finite-volume solver, verified by self-convergence (0.06\% between $256^2$ and $512^2$), re-labels the
 standard 900/100/200 split at the native $128^2$ grid. The PDEBench labels differ from the converged solution of the stated
-problem by 5.8\% on average and up to 48\%, which confirms informal reports~\cite{issue102,caebench}. We split the
+problem by 5.8\% on average and up to 48\%, which confirms informal reports~\cite{issue102,flowguard}. We split the
 discrepancy into a uniform 3.5\% from imposing $u=0$ one cell outside the domain and a non-convergence part that is
 negligible for most maps but reaches 15.5\% on low-permeability maps, the cases usually reported as the operators' hardest.
 An FNO~\cite{fno} that scores 2.5\% against PDEBench labels is 6.4\% off the converged solutions and 36\% off on those maps;
