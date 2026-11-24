@@ -41,6 +41,7 @@ ROOT = T.ROOT
 HARD = 0.05
 LOGK = False                                                       # --log-kappa: the network sees log(kappa)
 EQUIV = False                                                      # --scale-equiv: exact Darcy scaling symmetry
+DROP = False                                                       # --bc drop: pressure-drop problem (u=1 left, u=0 right)
 
 
 def kgeo(k):
@@ -73,16 +74,28 @@ def gpu_temp(idx):
         return 0
 
 
-def flux_rel(p, t, k):
+def flux_rel(p, t, k, drop=False):
     """Per-sample relative L2 error of two-point face fluxes -k_face * du (harmonic face permeability,
     interior faces plus Dirichlet boundary faces half a cell out). Grid spacing cancels in the ratio."""
     hx = 2 * k[:, :, 1:] * k[:, :, :-1] / (k[:, :, 1:] + k[:, :, :-1]); hy = 2 * k[:, 1:] * k[:, :-1] / (k[:, 1:] + k[:, :-1])
     def q(u):
+        if drop:                                                   # pressure drop: u=1 left, u=0 right, no flow top/bottom
+            return torch.cat([(hx * (u[:, :, 1:] - u[:, :, :-1])).flatten(1), (hy * (u[:, 1:] - u[:, :-1])).flatten(1),
+                              2 * (k[:, :, 0] * (u[:, :, 0] - 1)).flatten(1), 2 * (k[:, :, -1] * u[:, :, -1]).flatten(1)], 1)
         return torch.cat([(hx * (u[:, :, 1:] - u[:, :, :-1])).flatten(1), (hy * (u[:, 1:] - u[:, :-1])).flatten(1),
                           2 * (k[:, :, 0] * u[:, :, 0]).flatten(1), 2 * (k[:, :, -1] * u[:, :, -1]).flatten(1),
                           2 * (k[:, 0] * u[:, 0]).flatten(1), 2 * (k[:, -1] * u[:, -1]).flatten(1)], 1)
     qp, qt = q(p), q(t)
     return (qp - qt).norm(dim=1) / qt.norm(dim=1)
+
+
+def grad_rel(p, t):
+    """Per-sample relative L2 error of finite-difference gradients (an unweighted H1-seminorm loss; the standard
+    gradient-supervision baseline, e.g. the neuraloperator Darcy H1 loss)."""
+    def g(u):
+        return torch.cat([(u[:, :, 1:] - u[:, :, :-1]).flatten(1), (u[:, 1:] - u[:, :-1]).flatten(1)], 1)
+    gp, gt = g(p), g(t)
+    return (gp - gt).norm(dim=1) / gt.norm(dim=1)
 
 
 def area_hi(k):
@@ -101,7 +114,7 @@ def evaluate(model, data, k128, u128, res, stats, scale, return_pred=False):
     out = T.predict(model, data, kin(k128), res, stats)[..., 0] * stats["u_std"] + stats["u_mean"]
     if scale:
         out = out / kappa_h(k128)[:, None, None]
-    if EQUIV:
+    if EQUIV and not DROP:
         out = out / kgeo(k128)[:, None, None]
     tgt = u128[:, ::s, ::s]
     e = ((out - tgt).reshape(len(out), -1).norm(dim=1) / tgt.reshape(len(tgt), -1).norm(dim=1)).cpu().numpy()
@@ -125,7 +138,10 @@ def main(argv):
     global EQUIV
     EQUIV = take(argv, "--scale-equiv", False, is_bool=True)
     test_npz = take(argv, "--test-npz", None)                    # replace test labels (e.g. converged solver labels)
-    flux_w = take(argv, "--flux-loss", 0.0, float)               # weight of the relative face-flux loss
+    global DROP
+    DROP = take(argv, "--bc", "zero") == "drop"                    # pressure-drop problem (data/drop*): aug uses its own symmetries
+    flux_w = take(argv, "--flux-loss", 0.0, float)
+    h1_w = take(argv, "--h1-loss", 0.0, float)                   # weight of the relative gradient (H1-seminorm) loss               # weight of the relative face-flux loss
     if "--out-root" not in argv:
         argv += ["--out-root", str(ROOT / "results" / "ext" / "runs")]
     if "--model" not in argv:
@@ -168,7 +184,7 @@ def main(argv):
         data.k_te, data.u_te = torch.tensor(z["kappa128"], device=dev), torch.tensor(z["u128"], device=dev)
     if scale:
         data.u_tr = data.u_tr * kappa_h(data.k_tr)[:, None, None]
-    if EQUIV:
+    if EQUIV and not DROP:
         data.u_tr = data.u_tr * kgeo(data.k_tr)[:, None, None]
     import types
     stats = T.make_stats(types.SimpleNamespace(k_tr=kin(data.k_tr), u_tr=data.u_tr), a.res)
@@ -193,7 +209,12 @@ def main(argv):
             perm, pos = torch.randperm(N, generator=gen), 0
         idx = perm[pos:pos + a.batch].to(dev); pos += a.batch
         kb, ub = data.k_tr[idx], data.u_tr[idx]
-        if a.aug == "d4":
+        if a.aug == "d4" and DROP:                                 # symmetries of the drop problem: y flip; x flip with u -> 1-u
+            t = int(torch.randint(0, 4, (1,), generator=gen))
+            if t & 1: kb, ub = kb.flip(-2), ub.flip(-2)
+            if t & 2: kb, ub = kb.flip(-1), 1 - ub.flip(-1)
+            kb, ub = kb.contiguous(), ub.contiguous()
+        elif a.aug == "d4":
             t = int(torch.randint(0, 8, (1,), generator=gen))
             kb, ub = T.d4(kb, t).contiguous(), T.d4(ub, t).contiguous()
         r = resg[int(torch.randint(0, 3, (1,), generator=gen))] if multires else a.res
@@ -204,7 +225,9 @@ def main(argv):
         if flux_w > 0:
             sr = 128 // r
             loss = loss + flux_w * flux_rel(po[..., 0] * stats["u_std"] + stats["u_mean"],
-                                            tgt[..., 0] * stats["u_std"] + stats["u_mean"], kb[:, ::sr, ::sr]).mean()
+                                            tgt[..., 0] * stats["u_std"] + stats["u_mean"], kb[:, ::sr, ::sr], DROP).mean()
+        if h1_w > 0:
+            loss = loss + h1_w * grad_rel(po[..., 0] * stats["u_std"] + stats["u_mean"], tgt[..., 0] * stats["u_std"] + stats["u_mean"]).mean()
         opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
         step += 1
         if therm >= 0:                                             # shared lab card: adaptive duty cycle
@@ -230,7 +253,7 @@ def main(argv):
     hard = (area_hi(data.k_te[:, ::2, ::2]) < HARD).cpu().numpy()
     res = {"spec": vars(a), "arch": arch, "target_scale": "kappa_h" if scale else "none", "extra": extra, "n_extra": n_extra,
            "multires": multires, "train_npz": Path(train_npz).name if train_npz else None, "train_mode": train_mode if train_npz else None,
-           "val_npz": Path(val_npz).name if val_npz else None, "log_kappa": LOGK, "scale_equiv": EQUIV, "test_npz": Path(test_npz).name if test_npz else None, "flux_loss": flux_w, "params": n_params, "gpu": torch.cuda.get_device_name(0) if dev.type == "cuda" else "cpu",
+           "val_npz": Path(val_npz).name if val_npz else None, "log_kappa": LOGK, "scale_equiv": EQUIV, "test_npz": Path(test_npz).name if test_npz else None, "flux_loss": flux_w, "h1_loss": h1_w, "bc": "drop" if DROP else "zero", "params": n_params, "gpu": torch.cuda.get_device_name(0) if dev.type == "cuda" else "cpu",
            "train_time_s": train_time, "best_step": best["step"], "best_val": best["val"],
            "test_mean": float(te.mean()), "test_median": float(np.median(te)), "test_per_sample": te.tolist(),
            "n_hard_test": int(hard.sum()), "test_hard": float(te[hard].mean()), "test_rest": float(te[~hard].mean())}
