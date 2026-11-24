@@ -157,21 +157,37 @@ def check():
 
 
 # ── scoring ──────────────────────────────────────────────────────────────────
+def band(k, w=2):
+    """Cells within w cells of a permeability jump (M, N, N) -> bool; faces are in the band if either side is."""
+    j = np.zeros(k.shape, bool)
+    dx = k[..., :, 1:] != k[..., :, :-1]; dy = k[..., 1:, :] != k[..., :-1, :]
+    j[..., :, 1:] |= dx; j[..., :, :-1] |= dx; j[..., 1:, :] |= dy; j[..., :-1, :] |= dy
+    b = j.copy()
+    for _ in range(w - 1):
+        g = b.copy(); g[..., :, 1:] |= b[..., :, :-1]; g[..., :, :-1] |= b[..., :, 1:]; g[..., 1:, :] |= b[..., :-1, :]; g[..., :-1, :] |= b[..., 1:, :]; b = g
+    bx = np.concatenate([b[..., :, :1], b[..., :, 1:] | b[..., :, :-1], b[..., :, -1:]], -1)
+    z = np.zeros(b.shape[:-2] + (1, b.shape[-1]), bool)
+    by = np.concatenate([z, b[..., 1:, :] | b[..., :-1, :], z], -2)
+    return b, bx, by
+
+
 def rel(a, b):
     return np.abs(a - b) / np.abs(b)
 
 
 def score_set(P, K, G, P_ref=400):
     """P (S, M, N, N) predictions of S seeds; returns mean errors over seeds and maps."""
-    ref = downstream(G, K, P_ref); qx_t, qy_t = faces(G, K); out = []
+    ref = downstream(G, K, P_ref); qx_t, qy_t = faces(G, K); out = []; cb, bx, by = band(K)
     for p in P:
         d = downstream(p, K, P_ref); qx, qy = faces(p, K)
         num = np.sqrt(((qx - qx_t) ** 2).sum((1, 2)) + ((qy - qy_t) ** 2).sum((1, 2)))
         den = np.sqrt((qx_t ** 2).sum((1, 2)) + (qy_t ** 2).sum((1, 2)))
         lt = np.abs(np.log(d["t"] / ref["t"]))
+        ex, ey = (qx - qx_t) ** 2, (qy - qy_t) ** 2
+        bshare = ((ex * bx).sum((1, 2)) + (ey * by).sum((1, 2))) / np.maximum(ex.sum((1, 2)) + ey.sum((1, 2)), 1e-30)
         out.append({"p": np.linalg.norm((p - G).reshape(len(G), -1), axis=1) / np.linalg.norm(G.reshape(len(G), -1), axis=1),
                     "q": num / den, "keff": rel(d["keff"], ref["keff"]), "keff_inout": np.abs(d["keff"] / d["keff_in"] - 1),
-                    "t5": lt[:, 0], "t50": lt[:, 1], "t95": lt[:, 2], "lost": d["lost"]})
+                    "t5": lt[:, 0], "t50": lt[:, 1], "t95": lt[:, 2], "lost": d["lost"], "band_share": bshare, "band_area": cb.mean((1, 2))})
     agg = {key: float(np.mean([np.nanmean(np.where(np.isfinite(o[key]), o[key], np.nan)) for o in out])) for key in out[0]}
     agg["t95_inf_share"] = float(np.mean([np.mean(~np.isfinite(o["t95"])) for o in out]))
     agg["per_seed_p"] = [float(o["p"].mean()) for o in out]; agg["per_seed_q"] = [float(o["q"].mean()) for o in out]
