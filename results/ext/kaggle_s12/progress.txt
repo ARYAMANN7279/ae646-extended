@@ -1,0 +1,40 @@
+src/download_data.py 0 76349b0b4389) - matches PDEBench manifest
+Keys in 2D_DarcyFlow_beta1.0_Train.hdf5: ['nu', 'tensor', 'x-coordinate', 'y-coordinate']
+  attrs: {'beta': np.float64(1.0)}
+  nu (permeability) shape: (10000, 128, 128), dtype: float32
+  tensor (pressure) shape: (10000, 1, 128, 128), dtype: float32
+  Downloaded and verified
+
+Done. This single file contains all 10,000 PDEBench samples (no separate test file); src/preprocess.py performs the train/val/test split.
+Next step: run `python src/preprocess.py`.
+ 15G/1.31G [00:02<00:00, 569MB/s]
+md5 2D_DarcyFlow_beta1.0_Train.hdf5:  92%|█████████▏| 1.21G/1.31G [00:02<00:00, 569MB/s]
+md5 2D_DarcyFlow_beta1.0_Train.hdf5:  96%|█████████▋| 1.26G/1.31G [00:02<00:00, 568MB/s]
+md5 2D_DarcyFlow_beta1.0_Train.hdf5: 100%|██████████| 1.31G/1.31G [00:02<00:00, 567MB/s]
+
+src/preprocess.py 0 in statistics only)...
+Train inputs: (900, 64, 64, 3), targets: (900, 64, 64, 1)
+Val inputs:   (100, 64, 64, 3), targets: (100, 64, 64, 1)
+Test inputs:  (200, 64, 64, 3), targets: (200, 64, 64, 1)
+
+Normalization stats: {'coeff_mean': 0.5309522747993469, 'coeff_std': 0.44959667325019836, 'tensor_mean': 0.16486190259456635, 'tensor_std': 0.14429496228694916}
+Done. Processed data saved to /kaggle/temp/AE646/data/processed
+Next step: run training with `python src/train.py --config configs/fno.yaml`
+ 
+src/data_cache.py 0 {'train': 900, 'val': 100, 'test': 200, 'extra': 8800} | grid (128,) coords range 0.00390625 0.99609375
+  train: derived split == data/processed/train.npz : True
+  val: derived split == data/processed/val.npz : True
+  test: derived split == data/processed/test.npz : True
+ 
+split MATCH
+src/clean_labels.py 4 0 test 200 PDEBench vs clean rel-L2 mean 0.0581 median 0.0352 max 0.4756 43s
+val 100 PDEBench vs clean rel-L2 mean 0.0636 median 0.0353 max 0.4402 22s
+train 900 PDEBench vs clean rel-L2 mean 0.0643 median 0.0355 max 0.6208 188s
+ 
+data hashes {'/kaggle/temp/AE646/data/clean/test.npz': '4ead9f5040f7', '/kaggle/temp/AE646/data/clean/train.npz': '1365ed8d7fa7', '/kaggle/temp/AE646/data/clean/val.npz': 'a9c430ec0626', '/kaggle/temp/AE646/data/cleanmix/train.npz': 'e3518b6618bb', '/kaggle/temp/AE646/data/mixed_wide_clean/train.npz': 'c0fec50a8f06', '/kaggle/temp/AE646/data/mixed_wide_clean/val.npz': '4411346898c0', '/kaggle/temp/AE646/data/ood_clean/ID.npz': 'feb536ec2b1f', '/kaggle/temp/AE646/data/ood_clean/contrast_hi.npz': 'fb04e7d1f3b2', '/kaggle/temp/AE646/data/ood_clean/contrast_lo.npz': '8d8e26d97ceb', '/kaggle/temp/AE646/data/ood_clean/mostly_low.npz': '79afa393f683', '/kaggle/temp/AE646/data/ood_clean/rough.npz': '894f49ca342d', '/kaggle/temp/AE646/data/ood_clean/scaled_down.npz': 'd689cbe44d02', '/kaggle/temp/AE646/data/ood_clean/scaled_up.npz': 'b719078178c6', '/kaggle/temp/AE646/data/ood_clean/smooth.npz': '228c8428d980', '/kaggle/temp/AE646/data/ood_clean/three_phase.npz': '1725489e1572'}
+gpu1 f_unet_clean_flux1_s2 rc=0 6453s [f_unet_clean_flux1_s2] unet params 7.77M | val 0.0020 | test 0.0022 | hard 0.002 | res32/64/128 0.564/0.357/0.002 | 6424s
+gpu0 f_fno_clean_flux1_s2 rc=0 16008s [f_fno_clean_flux1_s2] fno params 9.48M | val 0.0024 | test 0.0024 | hard 0.002 | res32/64/128 0.081/0.027/0.002 | 15972s
+gpu1 f_fno_cleanmix_flux1_s2 rc=0 16545s [f_fno_cleanmix_flux1_s2] fno params 9.48M | val 0.0035 | test 0.0032 | hard 0.004 | res32/64/128 0.083/0.027/0.003 | 16517s
+gpu1 f_unet_clean_s2 rc=0 6422s [f_unet_clean_s2] unet params 7.77M | val 0.0023 | test 0.0023 | hard 0.002 | res32/64/128 0.658/0.473/0.002 | 6405s
+gpu0 f_fno_clean_s2 rc=0 15963s [f_fno_clean_s2] fno params 9.48M | val 0.0034 | test 0.0034 | hard 0.002 | res32/64/128 0.081/0.027/0.003 | 15935s
+ALL-DONE
