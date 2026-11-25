@@ -233,7 +233,7 @@ def main(argv):
         if therm >= 0:                                             # shared lab card: adaptive duty cycle
             if step % 10 == 0:
                 tc = gpu_temp(therm)
-                gap = min(0.5, gap + 0.01) if tc >= 83 else max(0.0, gap - 0.01) if tc <= 80 else gap
+                gap = min(0.5, gap + 0.01) if tc >= 80 else max(0.0, gap - 0.01) if tc <= 76 else gap
                 if tc >= 85:
                     torch.cuda.synchronize()
                     while gpu_temp(therm) > 80:
