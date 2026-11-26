@@ -98,6 +98,22 @@ def grad_rel(p, t):
     return (gp - gt).norm(dim=1) / gt.norm(dim=1)
 
 
+def pde_rel(p, t, k):
+    """PINO-style physics loss for the drop problem: per-sample L2 norm of the finite-volume residual (net outflow of
+    every cell, two-point harmonic face fluxes, Dirichlet left/right, no flow top/bottom) of the prediction, divided
+    by the L2 norm of the reference face fluxes. Zero for the exact discrete solution; uses no label beyond the scale."""
+    hx = 2 * k[:, :, 1:] * k[:, :, :-1] / (k[:, :, 1:] + k[:, :, :-1]); hy = 2 * k[:, 1:] * k[:, :-1] / (k[:, 1:] + k[:, :-1])
+    def faces(u):
+        z = torch.zeros_like(u[:, :1])
+        qx = torch.cat([2 * k[:, :, :1] * (1 - u[:, :, :1]), hx * (u[:, :, :-1] - u[:, :, 1:]), 2 * k[:, :, -1:] * u[:, :, -1:]], 2)
+        qy = torch.cat([z, hy * (u[:, :-1] - u[:, 1:]), z], 1)
+        return qx, qy
+    qx, qy = faces(p)
+    r = (qx[:, :, 1:] - qx[:, :, :-1] + qy[:, 1:] - qy[:, :-1]).flatten(1)
+    tx, ty = faces(t)
+    return r.norm(dim=1) / torch.cat([tx.flatten(1), ty.flatten(1)], 1).norm(dim=1)
+
+
 def area_hi(k):
     """High-permeability area share per map (B, H, W) -> (B,)."""
     return (k > 0.5 * (float(k.min()) + float(k.max()))).float().mean(dim=(1, 2))
@@ -141,6 +157,7 @@ def main(argv):
     global DROP
     DROP = take(argv, "--bc", "zero") == "drop"                    # pressure-drop problem (data/drop*): aug uses its own symmetries
     flux_w = take(argv, "--flux-loss", 0.0, float)
+    pde_w = take(argv, "--pde-loss", 0.0, float)                 # weight of the PINO-style residual loss (drop problem only)
     h1_w = take(argv, "--h1-loss", 0.0, float)                   # weight of the relative gradient (H1-seminorm) loss               # weight of the relative face-flux loss
     if "--out-root" not in argv:
         argv += ["--out-root", str(ROOT / "results" / "ext" / "runs")]
@@ -228,6 +245,10 @@ def main(argv):
                                             tgt[..., 0] * stats["u_std"] + stats["u_mean"], kb[:, ::sr, ::sr], DROP).mean()
         if h1_w > 0:
             loss = loss + h1_w * grad_rel(po[..., 0] * stats["u_std"] + stats["u_mean"], tgt[..., 0] * stats["u_std"] + stats["u_mean"]).mean()
+        if pde_w > 0:
+            sr = 128 // r
+            loss = loss + pde_w * pde_rel(po[..., 0] * stats["u_std"] + stats["u_mean"],
+                                          tgt[..., 0] * stats["u_std"] + stats["u_mean"], kb[:, ::sr, ::sr]).mean()
         opt.zero_grad(set_to_none=True); loss.backward(); opt.step(); sched.step()
         step += 1
         if therm >= 0:                                             # shared lab card: adaptive duty cycle
@@ -253,7 +274,7 @@ def main(argv):
     hard = (area_hi(data.k_te[:, ::2, ::2]) < HARD).cpu().numpy()
     res = {"spec": vars(a), "arch": arch, "target_scale": "kappa_h" if scale else "none", "extra": extra, "n_extra": n_extra,
            "multires": multires, "train_npz": Path(train_npz).name if train_npz else None, "train_mode": train_mode if train_npz else None,
-           "val_npz": Path(val_npz).name if val_npz else None, "log_kappa": LOGK, "scale_equiv": EQUIV, "test_npz": Path(test_npz).name if test_npz else None, "flux_loss": flux_w, "h1_loss": h1_w, "bc": "drop" if DROP else "zero", "params": n_params, "gpu": torch.cuda.get_device_name(0) if dev.type == "cuda" else "cpu",
+           "val_npz": Path(val_npz).name if val_npz else None, "log_kappa": LOGK, "scale_equiv": EQUIV, "test_npz": Path(test_npz).name if test_npz else None, "flux_loss": flux_w, "h1_loss": h1_w, "pde_loss": pde_w, "bc": "drop" if DROP else "zero", "params": n_params, "gpu": torch.cuda.get_device_name(0) if dev.type == "cuda" else "cpu",
            "train_time_s": train_time, "best_step": best["step"], "best_val": best["val"],
            "test_mean": float(te.mean()), "test_median": float(np.median(te)), "test_per_sample": te.tolist(),
            "n_hard_test": int(hard.sum()), "test_hard": float(te[hard].mean()), "test_rest": float(te[~hard].mean())}
