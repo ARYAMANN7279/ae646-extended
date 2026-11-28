@@ -1,0 +1,24 @@
+{
+ "all": {
+  "n_models": 45,
+  "tau_p_keff": -0.15353535353535352,
+  "tau_p_q": 0.4161616161616161,
+  "tau_q_keff": 0.2929292929292929,
+  "rho_p_keff": -0.175098814229249,
+  "pair_flip_share_p_vs_keff": 0.5767676767676768,
+  "best_by_pressure": "d_unet_h1w0.3",
+  "its_keff_rank": 32,
+  "best_by_keff": "d_unet_flux1"
+ },
+ "no_deeponet": {
+  "n_models": 42,
+  "tau_p_keff": -0.32404181184668984,
+  "tau_p_q": 0.3310104529616725,
+  "tau_q_keff": 0.18699186991869918,
+  "rho_p_keff": -0.44526375496313103,
+  "pair_flip_share_p_vs_keff": 0.662020905923345,
+  "best_by_pressure": "d_unet_h1w0.3",
+  "its_keff_rank": 32,
+  "best_by_keff": "d_unet_flux1"
+ }
+}
