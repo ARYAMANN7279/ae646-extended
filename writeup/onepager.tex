@@ -28,7 +28,7 @@ non-convergence), confirming FlowGuard; all models are trained and scored on con
 \item \textbf{Flux metric.} Conservative two-point face fluxes and the interface band (cells within two of a permeability jump).
 \item \textbf{Downstream metrics.} A pressure-drop problem on the same maps; from each predicted pressure we compute the
 effective permeability $k_{\mathrm{eff}}$ and flux-weighted breakthrough times by semi-analytical (Pollock) particle tracking.
-\item \textbf{Controlled comparison.} FNO, U-Net, DeepONet; $L^2$, $H^1$ and a permeability-weighted face-flux loss;
+\item \textbf{Controlled comparison.} FNO, U-Net, DeepONet; $L^2$, $H^1$, a PDE-residual loss and a permeability-weighted face-flux loss;
 three seeds; in-distribution and shifted test sets (contrast, phase count, roughness, permeability level).
 \end{enumerate}
 
@@ -37,9 +37,11 @@ three seeds; in-distribution and shifted test sets (contrast, phase count, rough
 \item FNO and U-Net with 0.33\% and 0.23\% pressure error have 8.9\% and 5.4\% flux error, concentrated at permeability jumps.
 \item With the $L^2$ loss, 0.2\% pressure error gives 9 to 14\% $k_{\mathrm{eff}}$ error, and FNO and U-Net swap rank
 between pressure and $k_{\mathrm{eff}}$.
-\item $H^1$ gives the best pressure but 3.3 to 8.0\% $k_{\mathrm{eff}}$ error (weights 0.3 to 3). The face-flux loss gives at most 1.3\%
-$k_{\mathrm{eff}}$ and at most 2.4\% late-breakthrough error at the same pressure error, with no architecture change.
-\item On maps from an independent generator: 11 to 23\% $k_{\mathrm{eff}}$ error with the face-flux loss, 52 to 894\% otherwise.
+\item $H^1$ gives the best pressure but 3.3 to 8.0\% $k_{\mathrm{eff}}$ error (weights 0.3 to 3). Losses that enforce conservative fluxes fix this:
+a PDE-residual (PINO-style) loss gives 1.4 to 2.0\% $k_{\mathrm{eff}}$; the face-flux loss gives at most 1.3\% $k_{\mathrm{eff}}$ and
+at most 2.4\% late-breakthrough error at the same pressure error, with no architecture change.
+\item On maps from an independent generator: 11 to 24\% $k_{\mathrm{eff}}$ error with flux-conserving losses, 52 to 894\% with $L^2$ and $H^1$.
+\item Why: $H^1$ matches gradients without weighting by permeability; both successful losses weight errors by permeability.
 \end{itemize}
 \begin{center}\includegraphics[width=0.95\textwidth]{fig_drop.pdf}\end{center}
 

@@ -16,13 +16,11 @@
 \end{center}
 \noindent
 Neural operators for steady Darcy flow, $-\nabla\cdot(\kappa\nabla u)=f$, are ranked by the relative $L^2$ error of the
-pressure $u$~\cite{pdebench}. Applications instead use the flux $q=-\kappa\nabla u$, through effective permeability and
-travel times. Whether pressure accuracy carries over to these quantities has not been tested. We test it against
-converged references.
+pressure $u$~\cite{pdebench}. Applications use the flux $q=-\kappa\nabla u$, through effective permeability and
+travel times. Whether pressure accuracy carries over to these has not been tested against converged references.
 
 \textbf{Labels.} Following~\cite{flowguard}, we re-solve the PDEBench $128^2$ split with a self-converged finite-volume
-solver (0.06\% change from $256^2$ to $512^2$). The published labels deviate by 5.8\% on average, from the boundary
-convention and from non-convergence on low-permeability maps.
+solver (0.06\% change from $256^2$ to $512^2$). The published labels deviate by 5.8\% on average.
 
 \textbf{Flux.} FNO~\cite{fno} and U-Net~\cite{unet} with 0.33\% and 0.23\% pressure error have 8.9\% and 5.4\% flux
 error, concentrated in the cells next to permeability jumps.
@@ -30,9 +28,10 @@ error, concentrated in the cells next to permeability jumps.
 \textbf{Downstream.} On a pressure-drop problem over the same maps, we compute the effective permeability
 $k_{\mathrm{eff}}$ and breakthrough times by particle tracking (Fig.~\ref{fig:main}). With the $L^2$ loss, 0.2\% pressure
 error gives 9 to 14\% $k_{\mathrm{eff}}$ error, and the two models swap rank. An $H^1$ loss~\cite{sobolevfno} gives the
-best pressure but still 3.3 to 8.0\% $k_{\mathrm{eff}}$ error for weights 0.3 to 3. A permeability-weighted face-flux loss lowers
-$k_{\mathrm{eff}}$ error to 1.3\% or less and late-breakthrough error to 2.4\% at unchanged pressure error. On maps from an
-independent generator it gives 11 to 23\% $k_{\mathrm{eff}}$ error, against 52 to 894\% for the other losses.
+best pressure but still 3.3 to 8.0\% $k_{\mathrm{eff}}$ error for weights 0.3 to 3. Losses that enforce conservative fluxes close most of the gap: a PDE-residual
+loss~\cite{pino} gives 1.4 to 2.0\% $k_{\mathrm{eff}}$ error, and a permeability-weighted face-flux loss gives 1.3\% or less, with
+2.4\% late-breakthrough error at unchanged pressure error. On maps from an independent generator, flux-conserving losses
+give 11 to 24\% $k_{\mathrm{eff}}$ error, against 52 to 894\% for $L^2$ and $H^1$.
 
 Pressure error is not a reliable proxy for flow accuracy~\cite{betterscores}. We propose flux and downstream metrics for
 Darcy benchmarks and will release the labels, data and code.
